@@ -1,26 +1,32 @@
 -- | You can find a tutorial on this template at https://www.fpcomplete.com/school/tagsoup
 
-module Main where
+{-# LANGUAGE OverloadedStrings #-}
 
-import Network.HTTP (simpleHTTP, getRequest, getResponseBody)
-import Text.HTML.TagSoup (Tag, parseTags, sections, (~==), fromAttrib, isTagOpenName)
-import Control.Monad (liftM)
+import Network.HTTP.Conduit (simpleHttp)
+import Prelude hiding (concat, putStrLn)
+import Data.Text (concat)
+import Data.Text.IO (putStrLn)
+import Text.HTML.DOM (parseLBS)
+import Text.XML.Cursor (Cursor, attribute, element, fromDocument, ($//), (&//), (&/), (&|))
 
 -- The URL we're going to search
 url = "http://www.bing.com/search?q=school+of+haskell"
 
--- The tag we're going to search for
-dataTag = "<h3>"
+-- The data we're going to search for
+findNodes :: Cursor -> [Cursor]
+findNodes = element "h3" &/ element "a"
 
--- The function to process the Tags
-process :: [[Tag String]] -> [String]
-process = map (fromAttrib "href") . filter (isTagOpenName "a") . map (!! 1)
+-- Extract the data from each node in turn
+extractData = concat . attribute "href"
 
--- The function to find tags. 
-findTags :: String -> [[Tag String]]
-findTags = sections (~== dataTag) . parseTags
+-- Process the list of data elements
+processData = mapM_ putStrLn
 
-page :: IO String
-page = simpleHTTP (getRequest url) >>= getResponseBody
+cursorFor :: String -> IO Cursor
+cursorFor u = do
+     page <- simpleHttp u
+     return $ fromDocument $ parseLBS page
 
-main = (print . process . findTags) =<< page
+main = do
+     cursor <- cursorFor url 
+     processData $ cursor $// findNodes &| extractData
